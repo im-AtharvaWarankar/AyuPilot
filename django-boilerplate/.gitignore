@@ -1,0 +1,17 @@
+venv/*
+**/__pycache__/*
+**/vault.py
+
+logs/*
+db_backup/*
+
+**/migrations/**
+!**/migrations
+!**/migrations/__init__.py
+
+!config/nginx/letsencrypt/.placeholder
+config/nginx/letsencrypt/*
+
+staticfiles/
+
+celerybeat-schedule

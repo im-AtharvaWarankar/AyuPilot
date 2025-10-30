@@ -1,0 +1,856 @@
+Refer to these and keep the format of the project files likewise:
+
+Models.py
+
+class Event(AtomicBaseModel):
+    # Choices for Admission Criteria
+    class AdmissionCriteria(models.TextChoices):
+        CASUAL = "Casual", _("Casual")
+        ELEGANT = "Elegant", _("Elegant")
+        FORMAL = "Formal", _("Formal")
+        EXCLUSIVE = "Exclusive", _("Exclusive")
+
+    establishmentId = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        verbose_name=_('establishment Id'),
+        related_name='establishments',
+        db_column='establishment_id',
+        null=True,
+    )
+    userId = models.ForeignKey(
+        AtomicBaseUsers,
+        verbose_name=_("Event User Id"),
+        related_name="event_user",
+        db_column="user_id",
+        on_delete=models.CASCADE,
+    )
+    companyId = models.ForeignKey(
+        Company,
+        verbose_name=_("Event Company Id"),
+        related_name="event_company",
+        db_column="company_id",
+        on_delete=models.CASCADE,
+    )
+    eventType = models.CharField(verbose_name=_("Event Type"), choices=EVENT_TYPE, max_length=512, db_column="Event Type")
+    name = models.CharField(verbose_name=_("Name"), max_length=255, db_column="Name")
+    latitude = models.DecimalField(verbose_name=_("Latitude"), max_digits=12, decimal_places=6, db_column="Latitude")
+    longitude = models.DecimalField(verbose_name=_("Longitude"), max_digits=12, decimal_places=6, db_column="Longitude")
+    address = models.CharField(verbose_name=_("Address"), max_length=255, null=True, db_column="address")
+    place = models.URLField(verbose_name=_("Maps URL"), max_length=255, null=True, db_column="place")
+    contact = models.CharField(verbose_name=_("Contact No"), max_length=20, db_column="contact_number", null=True)
+    description = models.TextField(
+        verbose_name=_("Description"), db_column="description", max_length=3000
+    )
+    category = models.ManyToManyField(
+        Category,
+        verbose_name=_("CategoryThrough"),
+        related_name="event_category",
+        db_column="category",
+        through="EventCategory",
+    )
+    subcategory = models.ManyToManyField(
+        SubCategory,
+        verbose_name=_("SubCategoryThrough"),
+        related_name="event_subcategory_through",
+        db_column="subcategory",
+        through="EventSubCategory",
+    )
+    favorites = models.ManyToManyField(
+        AtomicBaseUsers,
+        verbose_name=_("FavoritesThrough"),
+        related_name="event_favorites",
+        db_column="favorites",
+        through="UserEventFavorites",
+    )
+    videoURL = models.URLField(verbose_name=_("Video URL"), max_length=255, null=True, db_column="video URL")
+    metaData = models.JSONField(verbose_name=_("Meta Data"), null=True, db_column="Meta Data")
+    bookingLink = models.URLField(verbose_name=_("Booking Link"), max_length=255, null=True, db_column="Booking Link")
+    pricing = models.IntegerField(
+        verbose_name=_("Pricing"), choices=PRICING_CHOICES, default=1, db_column="Pricing"
+    )
+    placeType = models.ForeignKey(
+        Places,
+        verbose_name=_("Place Type"),
+        related_name="event_place",
+        db_column="place_type",
+        on_delete=models.RESTRICT,
+        null=True
+    )
+    isCompleted = models.BooleanField(verbose_name=_("Is Completed"), default=False, db_column="is_completed")
+    admissionCriteria = models.CharField(verbose_name=_("Admission Criteria"), max_length=20, choices=AdmissionCriteria.choices, default=AdmissionCriteria.CASUAL, db_column="Admission Criteria")
+    isSponsored = models.BooleanField(verbose_name=_("Is Sponsored"), default=False, db_column="is_sponsored")
+    bannerMessage = models.CharField(verbose_name=_("Banner Message"), null=True, db_column="Banner Message", max_length=40)
+    maxLimit = models.IntegerField(verbose_name=_("Max Limit"), null=True, db_column="Max Limit")
+    access = models.BooleanField(verbose_name=_("Access"), default=False, db_column="Access")
+    info = models.TextField(verbose_name=_("Info"), db_column="info", null=True)
+    hasGuestList = models.BooleanField(verbose_name=_("Has Guest List"), default=False, db_column="has_guest_list")
+    # TODO: Add the category for guest list x1
+
+    class Meta:
+        db_table = "event"
+        verbose_name_plural = "event"
+        managed = True
+
+    def __str__(self):
+        return self.name
+
+Serializers.py
+class EventSerializer(AtomicSerializer):
+    categoryData = serializers.SerializerMethodField()
+    subCategoryData = serializers.SerializerMethodField()
+    isFavorite = serializers.SerializerMethodField()
+    imageData = serializers.SerializerMethodField()
+    recurringTimeData = serializers.SerializerMethodField()
+    nonRecurringTimeData = serializers.SerializerMethodField()
+    distance = serializers.SerializerMethodField()
+    establishmentName = serializers.SerializerMethodField()
+    placeTypeName = serializers.SerializerMethodField()
+    displayType = serializers.SerializerMethodField()
+    displayDate = serializers.SerializerMethodField()
+    companyName = serializers.CharField(source='companyId.name', read_only=True)
+    companyInstagramUsername = serializers.CharField(source='companyId.instagramUsername', read_only=True)
+    companyProfilePicture = serializers.CharField(source='companyId.profilePicture', read_only=True)
+
+    def update(self, instance, validated_data):
+        if 'maxLimit' in validated_data:
+            qs = instance.event_nonrecurring.all()
+            for item in qs:
+                if item.guest_list.all().count() > validated_data['maxLimit']:
+                    raise serializers.ValidationError(_("You can not decrease the max limit"))
+            for item in qs:
+                item.maxLimit = validated_data['maxLimit']
+                item.save()
+        instance = super().update(instance, validated_data)
+        return instance
+
+    class Meta:
+        model = Event
+        fields = (
+            "id",
+            "createdAt",
+            "updatedAt",
+            "userId",
+            'establishmentId',
+            'establishmentName',
+            "name",
+            "latitude",
+            "longitude",
+            "address",
+            "contact",
+            "description",
+            "category",
+            "categoryData",
+            "isFavorite",
+            "subcategory",
+            "videoURL",
+            "subCategoryData",
+            "imageData",
+            "companyId",
+            "eventType",
+            "place",
+            "favorites",
+            "metaData",
+            "bookingLink",
+            "pricing",
+            "placeType",
+            "recurringTimeData",
+            "nonRecurringTimeData",
+            'distance',
+            'admissionCriteria',
+            'isCompleted',
+            'placeTypeName',
+            'bannerMessage',
+            "displayType",
+            "displayDate",
+            'access',
+            'maxLimit',
+            'info',
+            'companyName',
+            'companyInstagramUsername',
+            'companyProfilePicture',
+            'hasGuestList',
+        )
+        get_fields = fields
+        list_fields = [
+            "id",
+            "userId",
+            'establishmentId',
+            "name",
+            "latitude",
+            "longitude",
+            "address",
+            "contact",
+            "description",
+            "categoryData",
+            "subCategoryData",
+            "isFavorite",
+            "videoURL",
+            "imageData",
+            "recurringTimeData",
+            "nonRecurringTimeData",
+            'pricing',
+            "placeType",
+            'distance',
+            'eventType',
+            'admissionCriteria',
+            'isCompleted',
+            'placeTypeName',
+            'bannerMessage',
+            "displayType",
+            "displayDate",
+            'access',
+            'maxLimit',
+            'info',
+            'companyName',
+            'hasGuestList',
+        ]
+
+    def get_displayDate(self, obj):
+        try:
+            if self.context.get('displayDate', True):
+                compareDate = self.context.get('compareDate', str(datetime.now().date()))
+                if obj.eventType == 'event':
+                    return obj.event_nonrecurring.all().filter(date__gte=compareDate).order_by('date').first().date
+                else:
+                    return datetime.now().date()
+        except Exception:
+            return datetime.now().date()
+
+Views.py
+class EventViewSet(AtomicViewSet):
+    queryset = models.Event.objects.all()
+    serializer_class = serializers.EventSerializer
+    filterset_class = filters.EventFilter
+    permission_classes = [EventUsersPermission]
+    search_fields = [
+        "name",
+        # "address",
+        "description",
+        'admissionCriteria',
+        "category__enName",
+        "category__frName",
+        "subcategory__enName",
+        "subcategory__frName",
+    ]
+    ordering_fields = ("createdAt", "updatedAt", "name", "address", "description", "category__enName")
+    # ordering = ("-createdAt",)
+
+    def get_queryset(self):
+        searchEvent = self.request.query_params.get("searchEvent", None)
+        if searchEvent:
+            timeDeltaFrame = 3
+        else:
+            timeDeltaFrame = 1  # TODO verify the logic with Rahul
+        if self.request.user.userRole == "USER":
+            qs = self.queryset.filter(isCompleted=True)
+            today_date_time = datetime.now()
+            adjusted_date_time = today_date_time - timedelta(days=timeDeltaFrame)
+            adjusted_date = adjusted_date_time.date()
+            nonReObj = models.NonReCurringTimings.objects.filter(date__gte=adjusted_date).values_list("eventId", flat=True)
+            qs = qs.filter((Q(id__in=nonReObj) | Q(eventType="establishment")))
+            return qs
+        return self.queryset.all()
+
+    def filter_queryset(self, queryset):
+        qs = super().filter_queryset(queryset)
+        search_query = self.request.query_params.get('nameSearch', None)
+        if search_query is not None:
+            # Annotate with a custom field to rank matches by their relevance
+            qs = qs.annotate(
+                relevance=Case(
+                    When(name__icontains=search_query, then=Value(1)),
+                    When(description__icontains=search_query, then=Value(2)),
+                    default=Value(3),
+                    output_field=IntegerField()
+                )
+            ).order_by('relevance', 'name')
+            qs = qs.exclude(relevance=3)
+        #  TODO add order by date
+        # if qs.filter(eventType="event").count() > 0:
+        #     qs = qs.annotate(
+        #         eventRelevance=Case(
+        #             When(eventType="event", then=Value(1)),
+        #             default=Value(2),
+        #             output_field=IntegerField()
+        #         )
+        #     )
+        #     todays_date = datetime.today().date()
+        #     objs = models.NonReCurringTimings.objects.filter(date__gte=todays_date, eventId__in=qs.filter(eventRelevance=1).values_list('id', flat=True)).order_by('date')
+        #     qs1 = qs.filter(eventRelevance=1).order_by("event_nonrecurring__date")
+        #     qs2 = qs.filter(eventRelevance=2)
+        #     qs = qs1.union(qs2).order_by('eventRelevance')
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        file = request.FILES["file"] if "file" in request.FILES else None
+
+        if file is None:
+            serializer = self.get_serializer(data=request.data)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status.HTTP_201_CREATED)
+            return Response({"message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        file_format = file.name.split(".")[-1]
+        url = upload_file(file=file, folder="event/videos/", file_format=file_format, extraArgsUser={"ContentType": file.content_type})
+
+        if url is None:
+            return Response(
+                {"message": "File not Uploaded"}, status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        request.data["videoURL"] = url
+        serializer = self.get_serializer(data=request.data)
+
+        if serializer.is_valid():
+            instance = serializer.save()
+            video_compression.delay(eventId=str(instance.id))
+            return Response(serializer.data, status.HTTP_201_CREATED)
+        return Response({"message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=["post"], url_path='update-video')
+    def update_video(self, request, *args, **kwargs):
+        pk = request.query_params.get("eventId", None)
+        if pk is None:
+            return Response('Event Id is required as query params', status=status.HTTP_400_BAD_REQUEST)
+        instance = models.Event.objects.get(id=pk)
+        file = request.FILES["file"] if "file" in request.FILES else None
+        if file is None:
+            return Response(_("file is required"), status=status.HTTP_400_BAD_REQUEST)
+        file_format = file.name.split(".")[-1]
+        url = upload_file(file=file, folder="event/videos/", file_format=file_format, extraArgsUser={"ContentType": file.content_type})
+
+        # url = compress_image(file=file, folder="event/videos/")
+        if url is None:
+            return Response(
+                {"message": "File not Uploaded"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        instance.videoURL = url
+        instance.save()
+        video_compression.delay(eventId=str(instance.id))
+        return Response(_("Success Upload"), status=status.HTTP_200_OK)
+
+Filters.py
+class EventFilter(AtomicDateFilter):
+    categoryName = django_filters.CharFilter(
+        field_name="category", method="filter_categoryType"
+    )
+    subcategoryName = django_filters.CharFilter(
+        field_name="subcategory", method="filter_subcategoryType"
+    )
+    pricingRange = django_filters.CharFilter(
+        field_name="pricing", method="filter_pricingRange"
+    )
+    date = django_filters.CharFilter(
+        field_name="id", method="filter_date"
+    )
+    placeName = django_filters.CharFilter(field_name="placeType__name", lookup_expr="exact")
+    name = django_filters.CharFilter(field_name="name", lookup_expr="istartswith")
+    nameSearch = django_filters.CharFilter(method='filter_nameSearch')
+
+    class Meta:
+        model = Event
+        fields = [
+            "pricingRange",
+            "date",
+            "categoryName",
+            "subcategoryName",
+            "placeName",
+            'isCompleted',
+            'admissionCriteria',
+            'userId',
+            'companyId',
+            'establishmentId',
+            'eventType',
+            "isSponsored",
+            "name",
+            "nameSearch",
+            "maxLimit",
+            'access',
+            'hasGuestList',
+        ]
+
+    def filter_nameSearch(self, queryset, name, value):
+        return queryset.filter(Q(name__icontains=value) | Q(description__icontains=value))
+
+    def filter_date(self, queryset, name, value):
+        date = datetime.strptime(value, '%Y-%m-%d').date()
+        day = date.weekday() + 1
+        reObj = ReCurringTimings.objects.filter(day=day).values_list("eventId")
+        nonReObj = NonReCurringTimings.objects.filter(date=date).values_list("eventId")
+        return queryset.filter(Q(id__in=reObj) | Q(id__in=nonReObj))
+
+    def filter_categoryType(self, queryset, name, value):
+        return queryset.filter(
+            Q(category__enName__icontains=value) | Q(category__frName__icontains=value)
+        )
+
+    def filter_subcategoryType(self, queryset, name, value):
+        values = value.split(',')
+        if values == []:
+            return queryset
+
+        return queryset.filter(subcategory__enName__in=values)
+        # return queryset.filter(Q(subcategory__enName__icontains=value) | Q(subcategory__frName__icontains=value))
+
+    def filter_pricingRange(self, queryset, name, value):
+        value = value.split(',')
+        return queryset.filter(pricing__lte=int(value[1]), pricing__gte=int(value[0]))
+
+signals.py
+client = MongoClient(settings.MONGO_DB_URL, tlsCAFile=certifi.where())
+db = client["nighters"]
+collection = db["events_location"]  # TODO: change collection name
+collection.create_index([("location", "2dsphere")])
+
+
+@receiver(post_save, sender=Event)
+def save_location_to_mongo_db(sender, instance, created, **kwargs):
+    # add to database
+    if instance.isCompleted:
+        if created:
+            try:
+                data = {
+                    "name": instance.name,
+                    "eventId": str(instance.id),
+                    "location": {
+                        'type': 'Point',
+                        'coordinates': [float(instance.longitude), float(instance.latitude)]
+                    }
+                }
+                collection.insert_one(data)
+            except Exception:
+                pass
+
+        # update to database
+        else:
+            result = collection.find_one({'eventId': str(instance.id)})
+            if result:
+                collection.update_one({'eventId': str(instance.id)}, {'$set': {'location.coordinates': [float(instance.longitude), float(instance.latitude)], "name": instance.name}})
+
+            else:
+                data = {
+                    "name": instance.name,
+                    "eventId": str(instance.id),
+                    "location": {
+                        'type': 'Point',
+                        'coordinates': [float(instance.longitude), float(instance.latitude)]
+                    }
+                }
+                collection.insert_one(data)
+
+
+@receiver(post_save, sender=EventImages)
+def add_order_image(sender, instance, created, **kwargs):
+    if created:
+        eventId = instance.eventId.id
+        eventImageId = instance.id
+        queryset = EventImages.objects.filter(eventId=eventId).exclude(id=eventImageId)
+        if queryset.count() == 0:
+            instance.order = 1
+            instance.save()
+        else:
+            lastImage = queryset.order_by('order').last()
+            event = instance.eventId
+            event.isCompleted = True
+            event.save()
+            instance.order = lastImage.order + 1
+            instance.save()
+
+
+@receiver(post_save, sender=Event)
+def create_matrix_on_event_update(sender, instance, created, **kwargs):
+    if instance.isCompleted:
+        create_matrix.delay()
+
+
+Permissions.py
+class EventUsersPermission(permissions.BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        if request.user.is_authenticated:
+            if request.method in permissions.SAFE_METHODS:
+                return True
+            if view.action == "create":
+                objUserId = request.data["userId"]
+                if user.userRole == "PRO_USER":
+                    if str(user.id) == str(objUserId):
+                        if "companyId" in request.data:
+                            companyId = request.data["companyId"]
+                            companyUserId = Company.objects.filter(id=companyId).first().userId.id
+                            if str(user.id) == str(companyUserId):
+                                return True
+                            else:
+                                raise Exception("You Should be Company owner to perform this operation")
+            return True
+        return False
+
+    def has_object_permission(self, request, view, obj):
+        # Read permissions are allowed to any request,
+        # so we'll always allow GET, HEAD or OPTIONS requests.
+        if request.method in permissions.SAFE_METHODS:
+            if request.user.is_authenticated:
+                return True
+            return False
+
+        user = request.user
+        if request.method == "POST":
+            if user.userRole == "PRO_USER":
+                if user.id == obj.userId.id:
+                    return True
+            return False
+        # Instance must have an attribute named email
+        try:
+            authorize = request.user == obj.userId or request.user.is_superuser
+            if authorize:
+                return True
+            return False
+        except:
+            _ = sys.exc_info()[0]
+            return False
+
+tasks.py
+def call_api(api_url, data, headers):
+    requests.post(api_url, data=data, headers=headers)
+
+
+EVENT_COSINE_FILE_NAME = 'event_cosine.pkl'
+EVENT_FILE_NAME = 'event.csv'
+EVENT_TF_IDF_MODEL = 'event_TFIDF.pkl'
+EVENT_TF_IDF_MATRIX = 'event_TFIDF_matrix.pkl'
+
+
+def extract_feature(row):
+    try:
+        english_category = row['category_english_name']
+        if english_category and isinstance(english_category, list):
+            english_category_str = ", ".join(english_category)
+            english_category_str = ",  English Category: " + english_category_str
+        else:
+            english_category_str = ""
+
+        french_category = row['category_french_name']
+        if french_category and isinstance(french_category, list):
+            french_category_str = ", ".join(french_category)
+            french_category_str = ",  French Category: " + french_category_str
+        else:
+            french_category_str = ""
+
+        english_subcategory = row['subcategory_english_name']
+        if english_subcategory and isinstance(english_subcategory, list):
+            english_subcategory_str = ", ".join(english_subcategory)
+            english_subcategory_str = ",  English Subcategory: " + english_subcategory_str
+        else:
+            english_subcategory_str = ""
+
+        french_subcategory = row['subcategory_french_name']
+        if french_subcategory and isinstance(french_subcategory, list):
+            french_subcategory_str = ", ".join(french_subcategory)
+            french_subcategory_str = ",  French Subcategory: " + french_subcategory_str
+        else:
+            french_subcategory_str = ""
+
+        place_name = row['place_name']
+        if place_name:
+            place_name = ",  Place Name: " + place_name
+        else:
+            place_name = ""
+
+        data = f"""Place description:- {row['description']} Price: {row['pricing']} Type {row['admissionCriteria']} {place_name}{english_category_str} {french_category_str} {english_subcategory_str} {french_subcategory_str}
+        """
+        return data
+    except Exception as e:
+        raise Exception(f"Exception occurred while extracting feature: {str(e)}, in row : {row}")
+
+
+@app.task(bind=True)
+def video_compression(self, eventId):
+    try:
+        api_url = "https://uf3j54kkfn7ymmuwykxckgyz6a0qjwzj.lambda-url.eu-west-3.on.aws/"
+        api_token = "T0RBjBqkBMGdW09VCcCrQu0Azy4bD9gi"
+        query = Event.objects.get(id=eventId)
+        url = query.videoURL
+        if url is not None:
+            data = {
+                'url': url,
+                'id': eventId,
+                'app_label': 'event',
+                'model_name': 'Event',
+                'folder': 'event'
+            }
+            # headers = {'authorization': f'Token {api_token}'}
+            headers = {'authorization': f'Token {api_token}', 'Content-Type': 'application/json'}
+            data = json.dumps(data)
+            # Create a ThreadPoolExecutor
+            executor = ThreadPoolExecutor(max_workers=1)
+
+            # Submit the request to run asynchronously
+            executor.submit(call_api, api_url, data, headers)
+            return "Video compression started"
+        return "Video URL is None"
+    except Exception as e:
+        return f"Exception occurred while video compression: {str(e)}"
+
+
+@app.task(bind=True)
+def create_matrix(self):
+    try:
+        date = datetime.now().date() - timedelta(days=1)
+        all_events = Event.objects.all()
+        qs = all_events.prefetch_related('event_nonrecurring',)
+        qs_events = qs.filter(Q(eventType="event") & Q(event_nonrecurring__date__gte=date))
+        qs = qs.filter(~Q(eventType="event") | Q(pk__in=qs_events.values('id')))
+        qs = qs.filter(isCompleted=True)
+        qs = qs.values('id', 'eventType', 'name', 'description', 'pricing', 'admissionCriteria', 'placeType__name')
+
+        eventDF = pd.DataFrame.from_records(qs.values('id', 'eventType', 'name', 'description', 'pricing', 'admissionCriteria', 'placeType__name'))
+
+        catObjects = EventCategory.objects.filter(eventId__in=qs.values_list('id')).values('eventId__id', 'categoryId__enName', 'categoryId__frName')
+
+        catDF = pd.DataFrame.from_records(catObjects)
+        catDF = catDF.groupby('eventId__id').agg(
+            category_english_name=pd.NamedAgg(column='categoryId__enName', aggfunc=list),
+            category_french_name=pd.NamedAgg(column='categoryId__frName', aggfunc=list)
+        )
+
+        subcategories = EventSubCategory.objects.filter(eventId__in=qs.values_list('id')).values('eventId__id', 'subcategoryId__enName', 'subcategoryId__frName')
+        subCatDF = pd.DataFrame.from_records(subcategories)
+        subCatDF = subCatDF.groupby('eventId__id').agg(
+            subcategory_english_name=pd.NamedAgg(column='subcategoryId__enName', aggfunc=list),
+            subcategory_french_name=pd.NamedAgg(column='subcategoryId__frName', aggfunc=list)
+        )
+
+        df = eventDF.merge(catDF, left_on='id', right_on='eventId__id', how='left')
+        df = df.merge(subCatDF, left_on='id', right_on='eventId__id', how='left')
+
+        rename_col_dict = {
+            'id': 'id',
+            'eventType': 'eventType',
+            'name': 'name',
+            'description': 'description',
+            'pricing': 'pricing',
+            'admissionCriteria': 'admissionCriteria',
+            'placeType__name': 'place_name',
+        }
+
+        df = df.rename(columns=rename_col_dict)
+        df['feature'] = df.apply(extract_feature, axis=1)
+        tfidf = TfidfVectorizer(stop_words='english')
+
+        # Construct the required TF-IDF matrix by fitting and transforming the data
+        tfidf_matrix = tfidf.fit_transform(df['feature'])
+
+        #  saving the model
+        joblib.dump(tfidf, EVENT_TF_IDF_MODEL)
+        joblib.dump(tfidf_matrix, EVENT_TF_IDF_MATRIX)
+
+        # Compute the cosine similarity matrix
+        cosine_sim = linear_kernel(tfidf_matrix, tfidf_matrix)
+
+        # save data frame
+        df.to_csv(EVENT_FILE_NAME)
+
+        # saving cosine matrix
+        joblib.dump(cosine_sim, EVENT_COSINE_FILE_NAME)
+
+    except Exception:
+        pass
+
+
+if not os.path.exists(EVENT_FILE_NAME) or not os.path.exists(EVENT_TF_IDF_MODEL) or not os.path.exists(EVENT_TF_IDF_MATRIX) or not os.path.exists(EVENT_COSINE_FILE_NAME):
+    create_matrix()
+
+utils.py
+def get_approx_distance(co1, co2):
+    """_summary_
+
+    Args:
+        co1 (_type_): _description_
+        co2 (_type_): _description_
+
+    Returns:
+        distance: in meters
+    """
+    try:
+        R = 6373.0
+        lat1 = radians(co1[0])
+        lon1 = radians(co1[1])
+        lat2 = radians(co2[0])
+        lon2 = radians(co2[1])
+        dlon = lon2 - lon1
+        dlat = lat2 - lat1
+        a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+        c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        distance = R * c
+        return round(distance, 2)  # in KM
+    except Exception:
+        return float(1)
+
+
+def get_googlemaps_distance(origin, destination, mode="walking"):
+    dist_matrix = gmaps.distance_matrix(
+        origins=origin, destinations=destination, mode=mode, units="metric"
+    )
+    distmeters = dist_matrix["rows"][0]["elements"][0]["distance"]["value"]
+    timeinsec = dist_matrix["rows"][0]["elements"][0]["duration"]["value"]
+    return distmeters, timeinsec
+
+
+def get_googlemaps_distance_multiple(origin, destination, mode="walking") -> list:
+    """_summary_
+    Args:
+        origin (_type_): _description_
+        destination (_type_): _description_
+        mode (str, optional): _description_. Defaults to "walking".
+
+    Returns:
+        list: [distance in meters, duration in seconds]
+    """
+    total_dest = len(destination)
+    IS_CONNECTED = False
+    for i in range(RETRY_COUNT):
+        try:
+            dist_matrix = gmaps.distance_matrix(
+                origins=origin, destinations=destination, mode=mode, units="metric"
+            )
+            IS_CONNECTED = True
+            break
+        except Exception:
+            pass
+            # return [[0, 0] for i in range(total_dest)]
+    if not IS_CONNECTED:
+        return [[0, 0] for i in range(total_dest)]
+    data = []
+    try:
+        for single_dist in dist_matrix["rows"][0]["elements"]:
+            data.append(
+                [single_dist["distance"]["value"], single_dist["duration"]["value"]]
+            )
+    except Exception:
+        return [[0, 0] for i in range(total_dest)]
+    return data
+
+forms.py
+from django import forms
+from .models import Places, Category
+
+
+class PlacesForm(forms.ModelForm):
+    file = forms.ImageField()
+
+    class Meta:
+        model = Places
+        fields = ("name", "file")
+
+
+class CategoryForm(forms.ModelForm):
+    file = forms.ImageField()
+
+    class Meta:
+        model = Category
+        fields = ("enName", "frName", "file", "xshortcut", )
+
+admin.py
+@admin.register(Places)
+class PlacesAdmin(admin.ModelAdmin):
+
+    list_per_page = 10
+    list_display = ('id', 'createdAt', 'updatedAt', 'name', 'image')
+    list_filter = ('createdAt', 'updatedAt',)
+    search_fields = ('name',)
+
+    def image(self, obj):
+        return format_html('<img src="{}" width="100" height="100" alt="image not available"/>', obj.URL)
+
+    def get_form(self, request, obj, *args, **kwargs):
+        if obj is None:
+            kwargs["form"] = PlacesForm
+        return super().get_form(request, obj, **kwargs)
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            if obj is not None:
+                if form.is_valid():
+                    file = request.FILES["file"]
+                    img_url = upload_file(file, folder='place/images', extraArgsUser={"ContentType": file.content_type})
+                    obj.URL = img_url
+        return super().save_model(request, obj, form, change)
+
+    def has_add_permission(self, request):
+        return True
+
+    def has_change_permission(self, request, obj=None):
+        return True
+
+    def has_delete_permission(self, request, obj=None):
+        return True
+
+
+@admin.register(Category)
+class CategoryAdmin(admin.ModelAdmin):
+    list_per_page = 10
+    list_display = (
+        'id',
+        'createdAt',
+        'updatedAt',
+        'enName',
+        'frName',
+        'xshortcut',
+        'image',
+    )
+    list_filter = ('createdAt', 'updatedAt', 'xshortcut')
+    search_fields = ('enName', 'frName', )
+
+    def image(self, obj):
+        return format_html('<a href="{}" target="_blank"><img src="{}" width="100" height="100" alt="image not available"/></a>', obj.URL, obj.URL)
+
+    def get_form(self, request, obj, *args, **kwargs):
+        if obj is None:
+            kwargs["form"] = CategoryForm
+        return super().get_form(request, obj, **kwargs)
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            if obj is not None:
+                if form.is_valid():
+                    file = request.FILES["file"]
+                    img_url = upload_file(file, folder='category/images', extraArgsUser={"ContentType": file.content_type})
+                    obj.URL = img_url
+        return super().save_model(request, obj, form, change)
+
+    def has_add_permission(self, request):
+        return True
+
+    def has_change_permission(self, request, obj=None):
+        return True
+
+    def has_delete_permission(self, request, obj=None):
+        return True
+
+urls.py
+router = DefaultRouter()
+router.register(r'places', PlacesViewSet, basename='places')
+router.register(r'event', EventViewSet, basename='Event')
+router.register(r'event-2', EventViewSet2, basename='Event-2')
+router.register(r'recurring', ReCurringTimingsViewSet, basename='recurring')
+router.register(r'non-recurring', NonReCurringTimingsViewSet, basename='non-recurring')
+router.register(r'category', CategoryViewSet, basename='category')
+router.register(r'subcategory', SubCategoryViewSet, basename='subcategory')
+router.register(r'user-favorites', UserEventFavoritesViewSet, basename='user-Event-favorites')
+router.register(r'event-images', EventImagesViewSet, basename='Event-images')
+router.register(r'event-category', EventCategoryViewSet, basename='Event-category')
+router.register(r'event-subcategory', EventSubCategoryViewSet, basename='Event-subcategory')
+router.register(r'category-place', CategoryPlaceView, basename='category-place')
+
+urlpatterns = [
+    path('home-filters/', HomeFilter.as_view(), name='home'),
+    path('event-page/', EventDetails.as_view(), name='event-page'),
+]
+
+urlpatterns = urlpatterns + router.urls
+
+(Make sure to keep the created at and updated at fields as it is if already implemented in the project)
+
+
+MAKE SURE YOU DONT REPLICATE THE EXACT VALUES FROM THESE FILES.JUST REFER TO THESE IN ORDER TO KEEP THE FORMAT SIMILAR FOR BETTER UNDERSTANDING.

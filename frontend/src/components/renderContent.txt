@@ -1,0 +1,115 @@
+  const renderContent = () => {
+    if (activeModule === 'overview') {
+      return (
+        <div className="space-y-6">
+          {/* Dashboard Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm">Total Patients</p>
+                  <p className="text-3xl font-bold text-gray-800">{dashboardStatsData.totalPatients}</p>
+                </div>
+                <Users className="text-green-600" size={32} />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm">Today's Appointments</p>
+                  <p className="text-3xl font-bold text-gray-800">{dashboardStatsData.todayAppointments}</p>
+                </div>
+                <Calendar className="text-blue-600" size={32} />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm">Pending Analyses</p>
+                  <p className="text-3xl font-bold text-gray-800">{dashboardStatsData.pendingAnalyses}</p>
+                </div>
+                <Activity className="text-orange-600" size={32} />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm">Completed Reports</p>
+                  <p className="text-3xl font-bold text-gray-800">{dashboardStatsData.completedReports}</p>
+                </div>
+                <FileText className="text-purple-600" size={32} />
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Patients */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Recent Patients</h3>
+            <div className="space-y-4">
+              {isLoadingData ? (
+                <p className="text-gray-600">Loading patients...</p>
+              ) : recentPatientsData.length === 0 ? (
+                <p className="text-gray-600">No patients found</p>
+              ) : (
+                recentPatientsData.slice(0, 5).map((patient: any) => (
+                  <div key={patient.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedPatient(patient)}>
+                    <div>
+                      <h4 className="font-semibold text-gray-800">{patient.name}</h4>
+                      <p className="text-sm text-gray-600">{patient.age} years  {patient.gender}  {patient.dosha || 'N/A'}</p>
+                    </div>
+                    <Phone className="text-gray-400" size={20} />
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Today's Appointments */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Today's Appointments</h3>
+            <div className="space-y-4">
+              {isLoadingData ? (
+                <p className="text-gray-600">Loading appointments...</p>
+              ) : todayAppointmentsApiData.length === 0 ? (
+                <p className="text-gray-600">No appointments scheduled for today</p>
+              ) : (
+                todayAppointmentsApiData.map((appointment: any) => (
+                  <div key={appointment.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                    <div className="flex items-center gap-4">
+                      <div className="bg-green-100 text-green-700 px-3 py-1 rounded">
+                        {appointment.appointmentTime || appointment.time}
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-800">{appointment.patientName || appointment.patient}</h4>
+                        <p className="text-sm text-gray-600">{appointment.appointmentType || appointment.type}</p>
+                      </div>
+                    </div>
+                    <span className={\px-3 py-1 rounded-full text-xs font-medium \\}>
+                      {appointment.status}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Other modules still show placeholder
+    return (
+      <div className="p-6">
+        <h2 className="text-2xl font-bold text-gray-800 mb-4">
+          {modules.find(m => m.id === activeModule)?.name || 'Dashboard'}
+        </h2>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+          <p className="text-yellow-800">
+            This module will be implemented soon. Current module: <strong>{activeModule}</strong>
+          </p>
+        </div>
+      </div>
+    );
+  };

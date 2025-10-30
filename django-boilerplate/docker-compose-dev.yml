@@ -1,0 +1,93 @@
+version: '3.1'
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: 'ayupilot-backend'
+    user: '${UID}:${GID}'
+    environment:
+      ENV: dev
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/opt/:Z
+    ports:
+      - 8000:8000
+    depends_on:
+      - db
+
+  db:
+    image: postgres:14
+    container_name: 'ayupilot-db'
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - 5432:5432
+    expose:
+      - 5432
+    volumes:
+      - ayupilot-db-data:/var/lib/postgresql/data
+
+  rabbit-mq:
+    image: rabbitmq:3.7-management
+    restart: always
+    container_name: 'ayupilot-rabbit-mq'
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+
+  celery:
+    container_name: 'ayupilot-celery'
+    build: .
+    command: celery -A src worker -l INFO  -E -f /opt/logs/celery/worker.logs
+    volumes:
+      - .:/opt/
+    depends_on:
+      - rabbit-mq
+      - backend
+    environment:
+      - DJANGO_SETTINGS_MODULE=src.settings.dev
+
+  celery-beat:
+    container_name: 'ayupilot-celery-beat'
+    build: .
+    command: celery -A src beat -l INFO -f /opt/logs/celery/beat.logs
+    volumes:
+      - .:/opt/
+    depends_on:
+      - rabbit-mq
+      - backend
+    environment:
+      - DJANGO_SETTINGS_MODULE=src.settings.dev
+
+  flower:
+    container_name: 'ayupilot-flower'
+    build: .
+    command: celery -A src flower --port=5555
+    image: mher/flower:0.9.7
+    ports:
+      - 5555:5555
+    volumes:
+      - .:/opt/
+    depends_on:
+      - backend
+      - celery
+      - rabbit-mq
+
+  redis:
+    container_name: 'ayupilot-redis'
+    image: redis
+    expose:
+      - 6379
+
+volumes:
+    ayupilot-db-data:
+    ayupilot-redis-data:
